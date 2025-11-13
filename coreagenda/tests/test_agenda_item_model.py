@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from coreagenda.models import AgendaItem
 
+pytestmark = pytest.mark.django_db
 
 @pytest.mark.unit
 class TestAgendaItemModel:

@@ -20,11 +20,13 @@ from coreagenda.models import (
 
 User = get_user_model()
 
+pytestmark = pytest.mark.django_db
+
 
 # User fixtures
 
 @pytest.fixture
-def user(db):
+def user():
     """Create a regular user."""
     return User.objects.create_user(
         username='testuser',
@@ -36,7 +38,7 @@ def user(db):
 
 
 @pytest.fixture
-def chairperson(db):
+def chairperson():
     """Create a user who serves as chairperson."""
     return User.objects.create_user(
         username='chair',
@@ -48,7 +50,7 @@ def chairperson(db):
 
 
 @pytest.fixture
-def note_taker(db):
+def note_taker():
     """Create a user who serves as note taker."""
     return User.objects.create_user(
         username='notetaker',
@@ -60,7 +62,7 @@ def note_taker(db):
 
 
 @pytest.fixture
-def reviewer(db):
+def reviewer():
     """Create a user who reviews agenda items."""
     return User.objects.create_user(
         username='reviewer',
@@ -72,7 +74,7 @@ def reviewer(db):
 
 
 @pytest.fixture
-def proposer(db):
+def proposer():
     """Create a user who proposes agenda items."""
     return User.objects.create_user(
         username='proposer',
@@ -86,7 +88,7 @@ def proposer(db):
 # Meeting fixtures
 
 @pytest.fixture
-def meeting(db, chairperson, note_taker):
+def meeting(chairperson, note_taker):
     """Create a basic meeting."""
     scheduled_date = timezone.now() + timedelta(days=7)
     return Meeting.objects.create(
@@ -103,7 +105,7 @@ def meeting(db, chairperson, note_taker):
 
 
 @pytest.fixture
-def scheduled_meeting(db, chairperson):
+def scheduled_meeting(chairperson):
     """Create a scheduled meeting."""
     scheduled_date = timezone.now() + timedelta(days=14)
     return Meeting.objects.create(
@@ -120,7 +122,7 @@ def scheduled_meeting(db, chairperson):
 
 
 @pytest.fixture
-def past_meeting(db, chairperson):
+def past_meeting(chairperson):
     """Create a past meeting."""
     scheduled_date = timezone.now() - timedelta(days=7)
     return Meeting.objects.create(
@@ -138,7 +140,7 @@ def past_meeting(db, chairperson):
 # AgendaItem fixtures
 
 @pytest.fixture
-def agenda_item(db, meeting, proposer):
+def agenda_item(meeting, proposer):
     """Create a basic agenda item in draft status."""
     return AgendaItem.objects.create(
         meeting=meeting,
@@ -152,7 +154,7 @@ def agenda_item(db, meeting, proposer):
 
 
 @pytest.fixture
-def submitted_agenda_item(db, meeting, proposer):
+def submitted_agenda_item(meeting, proposer):
     """Create a submitted agenda item."""
     item = AgendaItem.objects.create(
         meeting=meeting,
@@ -168,7 +170,7 @@ def submitted_agenda_item(db, meeting, proposer):
 
 
 @pytest.fixture
-def approved_agenda_item(db, meeting, proposer, reviewer):
+def approved_agenda_item(meeting, proposer, reviewer):
     """Create an approved agenda item."""
     item = AgendaItem.objects.create(
         meeting=meeting,
@@ -185,7 +187,7 @@ def approved_agenda_item(db, meeting, proposer, reviewer):
 
 
 @pytest.fixture
-def consent_agenda_item(db, meeting, proposer):
+def consent_agenda_item(meeting, proposer):
     """Create a consent agenda item."""
     return AgendaItem.objects.create(
         meeting=meeting,
@@ -202,7 +204,7 @@ def consent_agenda_item(db, meeting, proposer):
 # Presenter fixtures
 
 @pytest.fixture
-def presenter(db, agenda_item, user):
+def presenter(agenda_item, user):
     """Create a presenter for an agenda item."""
     return Presenter.objects.create(
         agenda_item=agenda_item,
@@ -213,7 +215,7 @@ def presenter(db, agenda_item, user):
 
 
 @pytest.fixture
-def external_presenter(db, agenda_item):
+def external_presenter(agenda_item):
     """Create an external presenter."""
     return Presenter.objects.create(
         agenda_item=agenda_item,
@@ -228,7 +230,7 @@ def external_presenter(db, agenda_item):
 # ActionItem fixtures
 
 @pytest.fixture
-def action_item(db, meeting, user):
+def action_item(meeting, user):
     """Create a basic action item."""
     return ActionItem.objects.create(
         meeting=meeting,
@@ -243,7 +245,7 @@ def action_item(db, meeting, user):
 
 
 @pytest.fixture
-def urgent_action_item(db, meeting, user):
+def urgent_action_item(meeting, user):
     """Create an urgent action item."""
     return ActionItem.objects.create(
         meeting=meeting,
@@ -258,7 +260,7 @@ def urgent_action_item(db, meeting, user):
 
 
 @pytest.fixture
-def overdue_action_item(db, meeting, user):
+def overdue_action_item(meeting, user):
     """Create an overdue action item."""
     return ActionItem.objects.create(
         meeting=meeting,
@@ -275,7 +277,7 @@ def overdue_action_item(db, meeting, user):
 # Minute fixtures
 
 @pytest.fixture
-def minute(db, meeting, user):
+def minute(meeting, user):
     """Create a basic minute entry."""
     return Minute.objects.create(
         meeting=meeting,
@@ -287,7 +289,7 @@ def minute(db, meeting, user):
 
 
 @pytest.fixture
-def decision_minute(db, meeting, agenda_item, user):
+def decision_minute(meeting, agenda_item, user):
     """Create a decision minute with votes."""
     return Minute.objects.create(
         meeting=meeting,
@@ -305,7 +307,7 @@ def decision_minute(db, meeting, agenda_item, user):
 
 
 @pytest.fixture
-def approved_minute(db, meeting, user, reviewer):
+def approved_minute(meeting, user, reviewer):
     """Create an approved minute."""
     minute = Minute.objects.create(
         meeting=meeting,
@@ -321,7 +323,7 @@ def approved_minute(db, meeting, user, reviewer):
 # AttendanceRecord fixtures
 
 @pytest.fixture
-def attendance_record(db, meeting, user):
+def attendance_record(meeting, user):
     """Create a basic attendance record."""
     return AttendanceRecord.objects.create(
         meeting=meeting,
@@ -333,7 +335,7 @@ def attendance_record(db, meeting, user):
 
 
 @pytest.fixture
-def virtual_attendance(db, meeting, user):
+def virtual_attendance(meeting, user):
     """Create a virtual attendance record."""
     return AttendanceRecord.objects.create(
         meeting=meeting,
@@ -345,7 +347,7 @@ def virtual_attendance(db, meeting, user):
 
 
 @pytest.fixture
-def absent_record(db, meeting, user):
+def absent_record(meeting, user):
     """Create an absence record."""
     return AttendanceRecord.objects.create(
         meeting=meeting,
@@ -357,7 +359,7 @@ def absent_record(db, meeting, user):
 
 
 @pytest.fixture
-def late_arrival_record(db, meeting, user):
+def late_arrival_record(meeting, user):
     """Create an attendance record with late arrival."""
     record = AttendanceRecord.objects.create(
         meeting=meeting,
@@ -373,7 +375,7 @@ def late_arrival_record(db, meeting, user):
 # ExternalRequest fixtures
 
 @pytest.fixture
-def external_request(db, meeting):
+def external_request(meeting):
     """Create an external request for agenda item."""
     return ExternalRequest.objects.create(
         meeting=meeting,
@@ -388,7 +390,7 @@ def external_request(db, meeting):
 
 
 @pytest.fixture
-def approved_external_request(db, meeting, reviewer):
+def approved_external_request(meeting, reviewer):
     """Create an approved external request."""
     request = ExternalRequest.objects.create(
         meeting=meeting,
@@ -407,7 +409,7 @@ def approved_external_request(db, meeting, reviewer):
 # Helper fixtures
 
 @pytest.fixture
-def multiple_users(db):
+def multiple_users():
     """Create multiple users for testing."""
     return [
         User.objects.create_user(
@@ -420,7 +422,7 @@ def multiple_users(db):
 
 
 @pytest.fixture
-def meeting_with_agenda(db, meeting, proposer, reviewer):
+def meeting_with_agenda(meeting, proposer, reviewer):
     """Create a meeting with multiple agenda items."""
     items = []
     for i in range(3):
@@ -443,7 +445,7 @@ def meeting_with_agenda(db, meeting, proposer, reviewer):
 
 
 @pytest.fixture
-def full_meeting(db, chairperson, note_taker, proposer, reviewer, multiple_users):
+def full_meeting(chairperson, note_taker, proposer, reviewer, multiple_users):
     """Create a complete meeting with all related objects."""
     # Create meeting
     scheduled_date = timezone.now() + timedelta(days=7)

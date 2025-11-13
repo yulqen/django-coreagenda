@@ -14,6 +14,8 @@ from coreagenda.services import (
     AttendanceService,
 )
 
+pytestmark = pytest.mark.django_db
+
 
 # ===== MeetingService Tests =====
 

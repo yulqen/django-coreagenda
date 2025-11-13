@@ -11,6 +11,8 @@ from coreagenda.models import Minute, AttendanceRecord, Presenter, ExternalReque
 
 # ===== Minute Model Tests =====
 
+pytestmark = pytest.mark.django_db
+
 @pytest.mark.unit
 class TestMinuteModel:
     """Test cases for Minute model."""

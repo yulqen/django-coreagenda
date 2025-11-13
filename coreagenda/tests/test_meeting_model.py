@@ -8,6 +8,8 @@ from django.core.exceptions import ValidationError
 
 from coreagenda.models import Meeting
 
+pytestmark = pytest.mark.django_db
+
 
 @pytest.mark.unit
 class TestMeetingModel:
