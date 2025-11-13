@@ -3,3 +3,7 @@ name = "django-coreagenda"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = []
+
+[project.optional-dependencies]
+dev = ["ruff", "isort", "django-extensions", "django-stubs"]
+test = ["pytest", "pytest-django"]
