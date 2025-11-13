@@ -6,4 +6,17 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["ruff", "isort", "django-extensions", "django-stubs"]
-test = ["pytest", "pytest-django"]
+test = ["Django>=5.0", "pytest", "pytest-django", "factory_boy"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+python_files = "test*.py"
+pythonpath = "."
+testpaths = ["coreagenda/tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+addopts = "--ds=tests.settings"
+markers = [
+    "unit: unit tests.",
+    "integration: integration tests.",
+    "workflow: workflow tests.",
+]

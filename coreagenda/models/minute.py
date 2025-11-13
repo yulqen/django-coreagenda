@@ -170,7 +170,6 @@ class Minute(models.Model):
         self.approved = True
         self.approved_by = user
         self.approved_at = timezone.now()
-        self.is_draft = False
         self.save()
 
     def publish(self):

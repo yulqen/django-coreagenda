@@ -79,7 +79,7 @@ class TestMinuteModel:
         assert minute.approved is True
         assert minute.approved_by == reviewer
         assert minute.approved_at is not None
-        assert minute.is_draft is False
+        assert minute.is_draft is True  # Still a draft until published
 
     def test_publish_minute(self, minute):
         """Test publishing a minute."""
@@ -131,25 +131,34 @@ class TestAttendanceRecordModel:
         str_repr = str(attendance_record)
         assert 'Present' in str_repr or 'Absent' in str_repr
 
-    def test_attendance_types(self, meeting, user):
+    def test_attendance_types(self, meeting, multiple_users):
         """Test different attendance types."""
         types = ['in_person', 'virtual', 'phone', 'absent', 'excused']
 
-        for attendance_type in types:
+        for idx, attendance_type in enumerate(types):
             record = AttendanceRecord.objects.create(
                 meeting=meeting,
-                user=user,
+                user=multiple_users[idx],
                 present=(attendance_type not in ['absent', 'excused']),
                 attendance_type=attendance_type,
                 role='attendee',
             )
             assert record.attendance_type == attendance_type
 
-    def test_attendance_roles(self, meeting, user):
+    def test_attendance_roles(self, db, meeting):
         """Test different attendance roles."""
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
         roles = ['attendee', 'observer', 'chairperson', 'note_taker', 'presenter', 'guest']
 
-        for role in roles:
+        for idx, role in enumerate(roles):
+            # Create a unique user for each role
+            user = User.objects.create_user(
+                username=f'role_test_user_{idx}',
+                email=f'roletest{idx}@example.com',
+                password='testpass123'
+            )
             record = AttendanceRecord.objects.create(
                 meeting=meeting,
                 user=user,
