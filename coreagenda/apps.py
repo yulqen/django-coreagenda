@@ -7,7 +7,7 @@ class CoreagendaConfig(AppConfig):
     """
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'coreagenda'
-    verbose_name = 'Core Agenda Management'
+    verbose_name = 'CoreAgenda Meeting Management'
 
     def ready(self):
         """
