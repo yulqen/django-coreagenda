@@ -30,4 +30,5 @@ dev = [
     "autoimport>=1.6.1",
     "black>=25.11.0",
     "isort>=7.0.0",
+    "pdbpp>=0.11.7",
 ]

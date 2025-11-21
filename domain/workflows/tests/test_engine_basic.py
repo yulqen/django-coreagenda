@@ -10,12 +10,16 @@ def test_workflow_definition():
         name="test definition",
         initial_step="initial request",
         steps={"initial_request", "triage", "allocation"},
-        transitions=[Transition("initial_step", "triage", "start")],
+        transitions=[
+            Transition("initial_step", "triage", "start"),
+            Transition("triage", "compltion", "basic_checks"),
+        ],
     )
-    assert flow
     with pytest.raises(dataclasses.FrozenInstanceError):
         # we cannot mutate the flow object
         flow.name = "Cedric"
+    assert len(flow.steps) == 3
+    assert len(flow.transitions) == 2
 
 
 def test_workflow_instance_exists():
