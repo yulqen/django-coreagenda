@@ -1,0 +1,20 @@
+image: debian/stable
+
+packages:
+    - curl
+sources:
+    - git@git.sr.ht:~veibareeri/django-coreagenda
+secrets:
+    - ae4bcf1f-cbd6-4a2b-873e-a1f64628e8a3
+tasks:
+    - install-uv: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+    - create-virtualenv: |
+        cd django-coreagenda
+        /home/build/.local/bin/uv venv
+    - install-dependencies: |
+        cd django-coreagenda
+        /home/build/.local/bin/uv sync --dev --frozen
+    - run-tests: |
+        cd django-coreagenda
+        /home/build/.local/bin/uv run pytest -q
