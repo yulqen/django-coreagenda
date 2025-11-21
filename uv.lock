@@ -142,6 +142,8 @@ dev = [
     { name = "black" },
     { name = "isort" },
     { name = "pdbpp" },
+    { name = "pytest" },
+    { name = "pytest-django" },
 ]
 
 [package.metadata]
@@ -165,6 +167,8 @@ dev = [
     { name = "black", specifier = ">=25.11.0" },
     { name = "isort", specifier = ">=7.0.0" },
     { name = "pdbpp", specifier = ">=0.11.7" },
+    { name = "pytest", specifier = ">=9.0.1" },
+    { name = "pytest-django", specifier = ">=4.11.1" },
 ]
 
 [[package]]
