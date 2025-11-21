@@ -2,21 +2,32 @@
 name = "django-coreagenda"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "autoimport>=1.6.1",
+    "black>=25.11.0",
+    "flake8>=7.3.0",
+]
 
 [project.optional-dependencies]
-dev = ["ruff", "isort", "django-extensions", "django-stubs"]
+dev = ["isort", "django-extensions", "django-stubs"]
 test = ["Django>=5.0", "pytest", "pytest-django", "factory_boy"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.settings"
 python_files = "test*.py"
 pythonpath = "."
-testpaths = ["coreagenda/tests"]
+testpaths = ["coreagenda/tests", "coreagenda/domain/worksflows/tests/test_*.py"]
 filterwarnings = ["ignore::DeprecationWarning"]
 addopts = "--ds=tests.settings"
 markers = [
     "unit: unit tests.",
     "integration: integration tests.",
     "workflow: workflow tests.",
+]
+
+[dependency-groups]
+dev = [
+    "autoimport>=1.6.1",
+    "black>=25.11.0",
+    "isort>=7.0.0",
 ]
