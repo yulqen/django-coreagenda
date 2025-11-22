@@ -22,7 +22,7 @@ class Actor:
 class WorkflowDefinition:
     name: str
     initial_step: str
-    steps: list[str]
+    steps: set[str]
     transitions: list[Transition]
 
 

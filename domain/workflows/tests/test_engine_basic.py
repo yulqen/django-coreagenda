@@ -5,7 +5,7 @@ from domain.workflows.definitions import (Transition, WorkflowDefinition,
                                           WorkflowInstance)
 
 
-def test_workflow_definition():
+def test_workflow_definition() -> None:
     flow = WorkflowDefinition(
         name="test definition",
         initial_step="initial request",
@@ -17,11 +17,11 @@ def test_workflow_definition():
     )
     with pytest.raises(dataclasses.FrozenInstanceError):
         # we cannot mutate the flow object
-        flow.name = "Cedric"
+        flow.name = "Cedric"  # type: ignore
     assert len(flow.steps) == 3
     assert len(flow.transitions) == 2
 
 
-def test_workflow_instance_exists():
+def test_workflow_instance_exists() -> None:
     instance = WorkflowInstance(id="1", name="test instance")
     assert instance
