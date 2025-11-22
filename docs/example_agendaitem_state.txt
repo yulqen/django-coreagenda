@@ -1,0 +1,16 @@
+stateDiagram-v2
+    [*] --> draft
+
+    draft --> details: start
+    details --> triage: submit
+    triage --> chair_review: send_to_chair
+
+    triage --> withdrawn: reject
+    chair_review --> withdrawn: reject
+
+    chair_review --> scheduled: approve
+    scheduled --> completed: meeting_held
+
+    withdrawn --> [*]
+    completed --> [*]
+
