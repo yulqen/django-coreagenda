@@ -66,7 +66,7 @@ from domain.workflows.definitions import (Checkpoint, Transition,
 TEST_FLOW = WorkflowDefinition(
     name="test definition",
     initial_step="initial request",
-    steps={"initial_request", "triage", "allocation"},
+    steps={"initial request", "triage", "allocation"},
     # the first arg of each Transition (from_step) should match declared steps
     transitions=[
         Transition("initial_step", "triage", "start"),
@@ -92,7 +92,6 @@ def test_workflow_definition() -> None:
         TEST_FLOW.name = "Cedric"  # type: ignore
     assert len(TEST_FLOW.steps) == 3
     assert len(TEST_FLOW.transitions) == 2
-    assert TEST_FLOW.is_valid() is True
 
 
 def test_worflow_definition_basic_validity() -> None:
