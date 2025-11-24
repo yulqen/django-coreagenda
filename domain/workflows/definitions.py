@@ -129,6 +129,9 @@ class WorkflowHistory:
     direction: str = "forward"
 
 
+# TODO: include an Actor field in the WorkflowHistory
+
+
 @dataclass
 class WorkflowInstance:
     """
@@ -152,6 +155,19 @@ class WorkflowInstance:
     checkpoints: list[Checkpoint]
 
     def apply_command(self, command: str, payload: dict, actor: Actor) -> None:
+        """
+        Applies a command to the workflow instance, potentially changing its state
+        and current step.
+
+        Args:
+            command: The name of the command to apply (e.g., "approve", "reject").
+            payload: A dictionary of data to be updated in the workflow instance's data.
+            actor: The actor (user or system) initiating the command.
+
+        Raises:
+            DomainException: If the command is invalid for the current step of
+            the workflow.
+        """
         _save_current_step = self.current_step
         transition = self.definition.find_transition(self.current_step, command)
         if transition is None:
