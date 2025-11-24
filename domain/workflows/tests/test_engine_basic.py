@@ -58,13 +58,16 @@ from datetime import datetime
 
 import pytest
 from domain.workflows.definitions import (Checkpoint, Transition,
-                                          WorkflowDefinition, WorkflowInstance)
+                                          WorkflowDefinition,
+                                          WorkflowDefinitionValidationError,
+                                          WorkflowInstance)
 
 
 TEST_FLOW = WorkflowDefinition(
     name="test definition",
     initial_step="initial request",
     steps={"initial_request", "triage", "allocation"},
+    # the first arg of each Transition (from_step) should match declared steps
     transitions=[
         Transition("initial_step", "triage", "start"),
         Transition("triage", "compltion", "basic_checks"),
@@ -89,6 +92,45 @@ def test_workflow_definition() -> None:
         TEST_FLOW.name = "Cedric"  # type: ignore
     assert len(TEST_FLOW.steps) == 3
     assert len(TEST_FLOW.transitions) == 2
+    assert TEST_FLOW.is_valid() is True
+
+
+def test_worflow_definition_validity_no_steps() -> None:
+    with pytest.raises(WorkflowDefinitionValidationError):
+        WorkflowDefinition(
+            name="bad definition",
+            initial_step="initial request",
+            steps=set(),  # steps are mandatory
+            transitions=[],  # transitions are mandatory
+        ).is_valid()
+    with pytest.raises(WorkflowDefinitionValidationError):
+        WorkflowDefinition(
+            name="bad definition",
+            initial_step="initial request",
+            steps={"initial_request"},  # steps are mandatory
+            transitions=[],  # transitions are mandatory
+        ).is_valid()
+    with pytest.raises(WorkflowDefinitionValidationError):
+        WorkflowDefinition(
+            name="bad definition",
+            initial_step="initial request",
+            steps={"first request", "second request"},  # steps are mandatory
+            transitions=[],  # transitions are mandatory
+        ).is_valid()
+    with pytest.raises(WorkflowDefinitionValidationError):
+        WorkflowDefinition(
+            name="bad definition",
+            initial_step="",
+            steps={"first request", "second request"},  # steps are mandatory
+            transitions=[],  # transitions are mandatory
+        ).is_valid()
+    with pytest.raises(WorkflowDefinitionValidationError):
+        WorkflowDefinition(
+            name="bad definition",
+            initial_step="",
+            steps={"first request", "second request"},  # steps are mandatory
+            transitions=[],  # transitions are mandatory
+        ).is_valid()
 
 
 def test_workflow_instance_exists() -> None:

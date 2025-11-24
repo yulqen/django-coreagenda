@@ -40,6 +40,11 @@ class Actor:
     name: str
 
 
+class WorkflowDefinitionValidationError(Exception):
+    def __init__(self, message: str) -> None:
+        self.message = message
+
+
 @dataclass(frozen=True)
 class WorkflowDefinition:
     """
@@ -53,6 +58,30 @@ class WorkflowDefinition:
     initial_step: str
     steps: set[str]
     transitions: list[Transition]
+
+    def is_valid(self) -> bool | WorkflowDefinitionValidationError:
+        """
+        Validates that a definition is correct.
+
+        Raises WorkflowDefinitionValidationError if the definition is invalid.
+
+        This method should be called in a try... except block to handle potential
+        validation errors.
+        """
+        if not self.transitions:
+            raise WorkflowDefinitionValidationError(
+                "A definition requires a list of Transition objects."
+            )
+        elif not self.steps:
+            raise WorkflowDefinitionValidationError(
+                "A definition requires a list of steps."
+            )
+        elif self.initial_step not in self.steps:
+            raise WorkflowDefinitionValidationError(
+                "The initial_step must existing in the list of steps."
+            )
+        else:
+            return True
 
 
 @dataclass
