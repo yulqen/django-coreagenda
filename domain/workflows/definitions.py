@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable
 
+from .errors import DomainException, WorkflowDefinitionValidationError
+
 
 @dataclass(frozen=True)
 class Transition:
@@ -40,11 +42,6 @@ class Actor:
     name: str
 
 
-class WorkflowDefinitionValidationError(Exception):
-    def __init__(self, message: str) -> None:
-        self.message = message
-
-
 @dataclass(frozen=True)
 class WorkflowDefinition:
     """
@@ -58,6 +55,23 @@ class WorkflowDefinition:
     initial_step: str
     steps: set[str]
     transitions: list[Transition]
+
+    def find_transition(self, step: str, command: str) -> Transition | None:
+        """
+        Finds a transition from a given step for a specific command.
+
+        Args:
+            step: The current step.
+            command: The command to apply.
+
+        Returns:
+            The matching Transition object, or None if no such transition exists.
+
+        """
+        for t in self.transitions:
+            if t.from_step == step and t.command == command:
+                return t
+        return None
 
     def is_valid(self) -> bool | WorkflowDefinitionValidationError:
         """
@@ -105,3 +119,16 @@ class WorkflowInstance:
     data: dict
     history: list[dict]
     checkpoints: list[Checkpoint]
+
+    def apply_command(self, command: str, payload: dict, actor: Actor) -> None:
+        transition = self.definition.find_transition(self.current_step, command)
+        if transition is None:
+            raise DomainException("Invalid transition")
+        # TODO implement guard
+        self.data.update(payload)
+        # TODO implement Events - not to just use strings
+        self.history.append(
+            {"event": "CommandApplied", "command": command, "step": self.current_step}
+        )
+        self.current_step = transition.to_step
+        self.history.append({"event": "StepEntered", "step": self.current_step})

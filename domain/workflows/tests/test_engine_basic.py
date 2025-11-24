@@ -57,20 +57,20 @@ import dataclasses
 from datetime import datetime
 
 import pytest
-from domain.workflows.definitions import (Checkpoint, Transition,
-                                          WorkflowDefinition,
-                                          WorkflowDefinitionValidationError,
-                                          WorkflowInstance)
+from domain.workflows.definitions import (Actor, Checkpoint, Transition,
+                                          WorkflowDefinition, WorkflowInstance)
+from domain.workflows.errors import (DomainException,
+                                     WorkflowDefinitionValidationError)
 
 
 TEST_FLOW = WorkflowDefinition(
     name="test definition",
     initial_step="initial request",
-    steps={"initial request", "triage", "allocation"},
+    steps={"initial_request", "triage", "allocation"},
     # the first arg of each Transition (from_step) should match declared steps
     transitions=[
-        Transition("initial_step", "triage", "start"),
-        Transition("triage", "compltion", "basic_checks"),
+        Transition("initial_request", "triage", "start_triage"),
+        Transition("triage", "completion", "start_triage"),
     ],
 )
 
@@ -98,21 +98,21 @@ def test_worflow_definition_basic_validity() -> None:
     with pytest.raises(WorkflowDefinitionValidationError):
         WorkflowDefinition(
             name="bad definition",
-            initial_step="initial request",
+            initial_step="initial_request",
             steps=set(),  # steps are mandatory
             transitions=[],  # transitions are mandatory
         ).is_valid()
     with pytest.raises(WorkflowDefinitionValidationError):
         WorkflowDefinition(
             name="bad definition",
-            initial_step="initial request",
+            initial_step="initial_request",
             steps={"initial_request"},  # steps are mandatory
             transitions=[],  # transitions are mandatory
         ).is_valid()
     with pytest.raises(WorkflowDefinitionValidationError):
         WorkflowDefinition(
             name="bad definition",
-            initial_step="initial request",
+            initial_step="initial_request",
             steps={"first request", "second request"},  # steps are mandatory
             transitions=[],  # transitions are mandatory
         ).is_valid()
@@ -120,14 +120,14 @@ def test_worflow_definition_basic_validity() -> None:
         WorkflowDefinition(
             name="bad definition",
             initial_step="",
-            steps={"first request", "second request"},  # steps are mandatory
+            steps={"first_request", "second_request"},  # steps are mandatory
             transitions=[],  # transitions are mandatory
         ).is_valid()
     with pytest.raises(WorkflowDefinitionValidationError):
         WorkflowDefinition(
             name="bad definition",
             initial_step="",
-            steps={"first request", "second request"},  # steps are mandatory
+            steps={"first_request", "second_request"},  # steps are mandatory
             transitions=[],  # transitions are mandatory
         ).is_valid()
 
@@ -137,9 +137,44 @@ def test_workflow_instance_exists() -> None:
         id="1",
         name="test instance",
         definition=TEST_FLOW,
-        current_step="initial request",
+        current_step="initial_request",
         data={},
         history=[],
         checkpoints=[],
     )
     assert instance.definition.name == "test definition"
+
+
+def test_workflow_can_move_from_first_step_to_second() -> None:
+    instance = WorkflowInstance(
+        id="1",
+        name="test instance",
+        definition=TEST_FLOW,
+        current_step="initial_request",
+        data={"requester": "Colin Requester"},
+        history=[],
+        checkpoints=[],
+    )
+    instance.apply_command(
+        "start_triage", {"notes": "Moved it on one step"}, actor=Actor("alice")
+    )
+    assert instance.current_step == "triage"
+    assert "Moved it on one step" == instance.data["notes"]
+
+
+def test_workflow_invalid_transition_raises_exception() -> None:
+    instance = WorkflowInstance(
+        id="1",
+        name="test instance",
+        definition=TEST_FLOW,
+        current_step="initial_request",
+        data={"requester": "Colin Requester"},
+        history=[],
+        checkpoints=[],
+    )
+    with pytest.raises(DomainException):
+        instance.apply_command(
+            "disallowed_command",
+            {"notes": "Moved it on one step"},
+            actor=Actor("alice"),
+        )
