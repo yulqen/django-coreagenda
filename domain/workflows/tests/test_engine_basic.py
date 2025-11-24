@@ -14,7 +14,7 @@ WorkflowInstance.apply_command("submit", data, user) is called, for example.
 The engine:
 
 - looks up the allowed transition (from current step: details -> triage)
-- executes any guards (e.g. must have description filled in)
+- executes any guards (e.g. must have description filled in) (NB: guards can come later)
 - updates the instance data (e.g. address presenter emails, descriptions, etc)
 - moves the current_step forward
 - appends history events (e.g. "submitted at 12:03 by Tommy")
@@ -58,7 +58,8 @@ from datetime import datetime
 
 import pytest
 from domain.workflows.definitions import (Actor, Checkpoint, Transition,
-                                          WorkflowDefinition, WorkflowInstance)
+                                          WorkflowDefinition, WorkflowHistory,
+                                          WorkflowInstance)
 from domain.workflows.errors import (DomainException,
                                      WorkflowDefinitionValidationError)
 
@@ -177,12 +178,27 @@ def test_workflow_can_move_all_steps() -> None:
     )
     assert instance.current_step == "triage"
     assert "Moved it on one step" == instance.data["notes"]
+    assert instance.history[0].event == "CommandApplied"
+    assert instance.history[0].initial_step == "initial_request"
+    assert instance.history[0].end_step == "triage"
+    assert instance.history[0].direction == "forward"
+    # apply_command will result in two history events being created:
+    #   CommandApplied and StepEntered
+    assert instance.history[1].event == "StepEntered"
+
     instance.apply_command(
         "complete",
         {"notes_on_completion": "Completed this task."},
         actor=Actor("alice"),
     )
     assert instance.current_step == "completed"
+    assert instance.history[2].event == "CommandApplied"
+    assert instance.history[2].initial_step == "triage"
+    assert instance.history[2].end_step == "completed"
+    assert instance.history[2].direction == "forward"
+    # apply_command will result in two history events being created:
+    #   CommandApplied and StepEntered
+    assert instance.history[3].event == "StepEntered"
 
 
 def test_workflow_invalid_transition_raises_exception() -> None:
@@ -234,3 +250,15 @@ def test_workflow_reveals_available_commands_pretty() -> None:
         == """start_triage: initial_request -> triage
 complete: triage -> completed"""
     )
+
+
+def test_workflow_history_object() -> None:
+    h_forward = WorkflowHistory(
+        initial_step="initial",
+        end_step="end",
+        event="CommandApplied",
+    )
+    assert h_forward.direction == "forward"
+    assert h_forward.event == "CommandApplied"
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        h_forward.direction = "back"  # type: ignore

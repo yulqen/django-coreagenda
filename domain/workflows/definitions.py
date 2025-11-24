@@ -121,6 +121,14 @@ class WorkflowDefinition:
             return True
 
 
+@dataclass(frozen=True)
+class WorkflowHistory:
+    initial_step: str
+    end_step: str
+    event: str
+    direction: str = "forward"
+
+
 @dataclass
 class WorkflowInstance:
     """
@@ -140,18 +148,29 @@ class WorkflowInstance:
     definition: WorkflowDefinition
     current_step: str
     data: dict
-    history: list[dict]
+    history: list[WorkflowHistory]
     checkpoints: list[Checkpoint]
 
     def apply_command(self, command: str, payload: dict, actor: Actor) -> None:
+        _save_current_step = self.current_step
         transition = self.definition.find_transition(self.current_step, command)
         if transition is None:
             raise DomainException("Invalid transition")
         # TODO implement guard
         self.data.update(payload)
-        # TODO implement Events - not to just use strings
         self.history.append(
-            {"event": "CommandApplied", "command": command, "step": self.current_step}
+            WorkflowHistory(
+                initial_step=self.current_step,
+                end_step=transition.to_step,
+                event="CommandApplied",
+            )
+            # {"event": "CommandApplied", "command": command, "step": self.current_step}
         )
         self.current_step = transition.to_step
-        self.history.append({"event": "StepEntered", "step": self.current_step})
+        self.history.append(
+            WorkflowHistory(
+                initial_step=_save_current_step,
+                end_step=self.current_step,
+                event="StepEntered",
+            )
+        )
