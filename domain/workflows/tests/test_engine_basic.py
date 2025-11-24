@@ -94,7 +94,7 @@ def test_workflow_definition() -> None:
     assert len(TEST_FLOW.transitions) == 2
 
 
-def test_worflow_definition_basic_validity() -> None:
+def test_workflow_definition_basic_validity() -> None:
     with pytest.raises(WorkflowDefinitionValidationError):
         WorkflowDefinition(
             name="bad definition",
