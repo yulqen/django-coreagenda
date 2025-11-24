@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Callable
 
 
@@ -11,6 +12,27 @@ class Transition:
     # this is interesting! adding a function to a dataclass...
     # dict is the payload of data here - whatever that is
     # see https://docs.python.org/3/library/typing.html#annotating-callable-objects
+
+
+@dataclass
+class Checkpoint:
+    """
+    Allow save-and-resume + reversability.
+
+    Any any point, the engine can save a snapshot of the current step + data (Checkpoint).
+    Also, restore a previous Checkpoint (rollback_to).
+
+    Enables:
+    - save and resume later functionality
+    - undo accidental step
+    - "chair has rejected changes" - go back two steps.
+    """
+
+    id: str
+    label: str
+    step: str
+    data: dict
+    created_at: datetime
 
 
 @dataclass(frozen=True)
@@ -49,20 +71,8 @@ class WorkflowInstance:
 
     id: str
     name: str
-
-
-@dataclass
-class Checkpoint:
-    """
-    Allow save-and-resume + reversability.
-
-    Any any point, the engine can save a snapshot of the current step + data (Checkpoint).
-    Also, restore a previous Checkpoint (rollback_to).
-
-    Enables:
-    - save and resume later functionality
-    - undo accidental step
-    - "chair has rejected changes" - go back two steps.
-    """
-
-    pass
+    definition: WorkflowDefinition
+    current_step: str
+    data: dict
+    history: list[dict]
+    checkpoints: list[Checkpoint]

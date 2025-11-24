@@ -54,29 +54,51 @@ Workflow definition drives everything.
 """
 
 import dataclasses
+from datetime import datetime
 
 import pytest
-from domain.workflows.definitions import (Transition, WorkflowDefinition,
-                                          WorkflowInstance)
+from domain.workflows.definitions import (Checkpoint, Transition,
+                                          WorkflowDefinition, WorkflowInstance)
+
+
+TEST_FLOW = WorkflowDefinition(
+    name="test definition",
+    initial_step="initial request",
+    steps={"initial_request", "triage", "allocation"},
+    transitions=[
+        Transition("initial_step", "triage", "start"),
+        Transition("triage", "compltion", "basic_checks"),
+    ],
+)
+
+
+def test_checkpoint_exists() -> None:
+    checkpoint = Checkpoint(
+        id="1",
+        label="test checkpoint",
+        step="initial_request",
+        data={},
+        created_at=datetime.now(),
+    )
+    assert checkpoint
 
 
 def test_workflow_definition() -> None:
-    flow = WorkflowDefinition(
-        name="test definition",
-        initial_step="initial request",
-        steps={"initial_request", "triage", "allocation"},
-        transitions=[
-            Transition("initial_step", "triage", "start"),
-            Transition("triage", "compltion", "basic_checks"),
-        ],
-    )
     with pytest.raises(dataclasses.FrozenInstanceError):
         # we cannot mutate the flow object
-        flow.name = "Cedric"  # type: ignore
-    assert len(flow.steps) == 3
-    assert len(flow.transitions) == 2
+        TEST_FLOW.name = "Cedric"  # type: ignore
+    assert len(TEST_FLOW.steps) == 3
+    assert len(TEST_FLOW.transitions) == 2
 
 
 def test_workflow_instance_exists() -> None:
-    instance = WorkflowInstance(id="1", name="test instance")
-    assert instance
+    instance = WorkflowInstance(
+        id="1",
+        name="test instance",
+        definition=TEST_FLOW,
+        current_step="initial request",
+        data={},
+        history=[],
+        checkpoints=[],
+    )
+    assert instance.definition.name == "test definition"
