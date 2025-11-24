@@ -95,7 +95,7 @@ def test_workflow_definition() -> None:
     assert TEST_FLOW.is_valid() is True
 
 
-def test_worflow_definition_validity_no_steps() -> None:
+def test_worflow_definition_basic_validity() -> None:
     with pytest.raises(WorkflowDefinitionValidationError):
         WorkflowDefinition(
             name="bad definition",
