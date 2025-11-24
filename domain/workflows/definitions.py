@@ -56,6 +56,29 @@ class WorkflowDefinition:
     steps: set[str]
     transitions: list[Transition]
 
+    def commands(self) -> list[str]:
+        """
+        Returns a list of all commands from the transitions.
+
+        Returns:
+            list[str]: A list of command strings.
+        """
+        return [t.command for t in self.transitions]
+
+    def commands_pretty(self) -> str:
+        """
+        Generates a pretty string representation of all commands and their transitions.
+
+        Returns:
+            str: A multi-line string where each line represents a command and
+            its associated from- and to-steps, formatted as "command:
+            from_step -> to_step".
+        """
+        command_strs = []
+        for t in self.transitions:
+            command_strs.append(f"{t.command}: {t.from_step} -> {t.to_step}")
+        return "\n".join(command_strs)
+
     def find_transition(self, step: str, command: str) -> Transition | None:
         """
         Finds a transition from a given step for a specific command.

@@ -70,7 +70,7 @@ TEST_FLOW = WorkflowDefinition(
     # the first arg of each Transition (from_step) should match declared steps
     transitions=[
         Transition("initial_request", "triage", "start_triage"),
-        Transition("triage", "completion", "start_triage"),
+        Transition("triage", "completed", "complete"),
     ],
 )
 
@@ -162,6 +162,29 @@ def test_workflow_can_move_from_first_step_to_second() -> None:
     assert "Moved it on one step" == instance.data["notes"]
 
 
+def test_workflow_can_move_all_steps() -> None:
+    instance = WorkflowInstance(
+        id="1",
+        name="test instance",
+        definition=TEST_FLOW,
+        current_step="initial_request",
+        data={"requester": "Colin Requester"},
+        history=[],
+        checkpoints=[],
+    )
+    instance.apply_command(
+        "start_triage", {"notes": "Moved it on one step"}, actor=Actor("alice")
+    )
+    assert instance.current_step == "triage"
+    assert "Moved it on one step" == instance.data["notes"]
+    instance.apply_command(
+        "complete",
+        {"notes_on_completion": "Completed this task."},
+        actor=Actor("alice"),
+    )
+    assert instance.current_step == "completed"
+
+
 def test_workflow_invalid_transition_raises_exception() -> None:
     instance = WorkflowInstance(
         id="1",
@@ -178,3 +201,36 @@ def test_workflow_invalid_transition_raises_exception() -> None:
             {"notes": "Moved it on one step"},
             actor=Actor("alice"),
         )
+
+
+def test_workflow_reveals_available_commands() -> None:
+    instance = WorkflowInstance(
+        id="1",
+        name="test instance",
+        definition=TEST_FLOW,
+        current_step="initial_request",
+        data={"requester": "Colin Requester"},
+        history=[],
+        checkpoints=[],
+    )
+    assert (
+        "start_triage" in instance.definition.commands()
+        and "complete" in instance.definition.commands()
+    )
+
+
+def test_workflow_reveals_available_commands_pretty() -> None:
+    instance = WorkflowInstance(
+        id="1",
+        name="test instance",
+        definition=TEST_FLOW,
+        current_step="initial_request",
+        data={"requester": "Colin Requester"},
+        history=[],
+        checkpoints=[],
+    )
+    assert (
+        instance.definition.commands_pretty()
+        == """start_triage: initial_request -> triage
+complete: triage -> completed"""
+    )
