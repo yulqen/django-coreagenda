@@ -228,3 +228,25 @@ def test_checkpoint() -> None:
     assert isinstance(history_event, CheckpointSaved)
     assert history_event.checkpoint == checkpoint
     assert history_event.actor == actor_bob
+
+
+def test_rolloback_from_checkpoint() -> None:
+    instance = WorkflowInstance(
+        id=str(uuid.uuid4()),
+        name="test instance",
+        definition=TEST_FLOW,
+        current_step="initial_request",
+        data={"requester": "Colin Requester"},
+        history=[],
+        checkpoints=[],
+    )
+    actor_bob = Actor("bob")
+    checkpoint = instance.save_checkpoint(label="First Checkpoint", actor=actor_bob)  # noqa
+    assert instance.current_step == "initial_request"
+    instance.apply_command(
+        "start_triage", {"notes": "Moved it on one step"}, actor=actor_bob
+    )
+    checkpoint = instance.save_checkpoint(label="Second Checkpoint", actor=actor_bob)  # noqa
+    assert instance.current_step == "triage"
+    instance.rollback()
+    assert instance.current_step == "initial_request"

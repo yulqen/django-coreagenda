@@ -231,3 +231,29 @@ class WorkflowInstance:
         # Record the creation of the checkpoint in the history log.
         self.history.append(CheckpointSaved(checkpoint=cp, actor=actor))
         return cp
+
+    def rollback(self) -> None:
+        # we expect to have a history containing CheckpointSaved events:
+        _checkpoint_events = [
+            event for event in self.history if isinstance(event, CheckpointSaved)
+        ]
+        # there could be many....
+        _checkpoints = [event.checkpoint for event in _checkpoint_events]
+        # we want the most recent...
+        sorted_checkpoints = sorted(_checkpoints, key=lambda x: x.created_at)
+        # how do we want to manage checkpoints? We need to retain checkpoints so we can
+        # roll back and forward. How should we indicate that "current" checkpoint we are on?
+        # If we "apply" the data to the WorkflowInstance from the most recent Checkpoint,
+        # that will change the state of the instance to basically match the penultimate
+        # checkpoint in this list of chronologically sorted checkpoints - yes?
+        # Should we use an additional attribute on Checkpoint (e.g. cursor=True) to
+        # indicate what Checkpoint we are currently on?
+        breakpoint()
+
+    def rollforward(self) -> None:
+        """
+        Use the next chronological Checkpoint in the list of chronologically
+        sorted Checkpoints, and use that to "apply" it's relevant data to the
+        WorkflowInstance (self)?
+        """
+        pass
