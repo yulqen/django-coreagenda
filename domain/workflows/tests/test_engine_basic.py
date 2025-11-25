@@ -1,65 +1,11 @@
-"""
-User takes an action -> engine applies a command.
-
-You can define workflows for:
-- AgendaItems
-- Meetings
-- ActionItems
-- ExternalRequests
-
-whatever!
-
-WorkflowInstance.apply_command("submit", data, user) is called, for example.
-
-The engine:
-
-- looks up the allowed transition (from current step: details -> triage)
-- executes any guards (e.g. must have description filled in) (NB: guards can come later)
-- updates the instance data (e.g. address presenter emails, descriptions, etc)
-- moves the current_step forward
-- appends history events (e.g. "submitted at 12:03 by Tommy")
-
-This is the heart of the engine: commands -> transitions -> new state.
-
----
-
-Later, when we add Django adapter layers:
-
-The engine doesn't talk to Django at all.
-
-We will create a Respository layer that adapts between:
-- Pure domain object (WorkflowInstance)
-- Django ORM model (WorkflowInstanceModel)
-
-The adapter:
-- loads from the DB and builds a domain instance
-- saves the domain instance -> writes JSON back to DB
-
-Django views and forms just ask the engine what to do; views are thin
-- load the correct WorkflowInstance via the Repository
-- determine the current step
-- render the form for the next step
-- When POST comes in:
-    - If "continue", call .apply_command()
-    - if "save for later, call .save_checkpoint()
-    - save it back to the DB
-    - redirect to the next page
-The viewer never hard-codes:
-- step names
-- allowed transitions
-- business rules
-- workflow branching
-
-Workflow definition drives everything.
-"""
-
 import dataclasses
+import uuid
 from datetime import datetime
 
 import pytest
-from domain.workflows.definitions import (Actor, Checkpoint, Transition,
-                                          WorkflowDefinition, WorkflowHistory,
-                                          WorkflowInstance)
+from domain.workflows.definitions import (Actor, Checkpoint, CheckpointSaved,
+                                          CommandApplied, Transition,
+                                          WorkflowDefinition, WorkflowInstance)
 from domain.workflows.errors import (DomainException,
                                      WorkflowDefinitionValidationError)
 
@@ -67,7 +13,7 @@ from domain.workflows.errors import (DomainException,
 TEST_FLOW = WorkflowDefinition(
     name="test definition",
     initial_step="initial request",
-    steps={"initial_request", "triage", "allocation"},
+    steps={"initial_request", "triage", "completed"},
     # the first arg of each Transition (from_step) should match declared steps
     transitions=[
         Transition("initial_request", "triage", "start_triage"),
@@ -78,7 +24,7 @@ TEST_FLOW = WorkflowDefinition(
 
 def test_checkpoint_exists() -> None:
     checkpoint = Checkpoint(
-        id="1",
+        id=str(uuid.uuid4()),
         label="test checkpoint",
         step="initial_request",
         data={},
@@ -135,7 +81,7 @@ def test_workflow_definition_basic_validity() -> None:
 
 def test_workflow_instance_exists() -> None:
     instance = WorkflowInstance(
-        id="1",
+        id=str(uuid.uuid4()),
         name="test instance",
         definition=TEST_FLOW,
         current_step="initial_request",
@@ -148,7 +94,7 @@ def test_workflow_instance_exists() -> None:
 
 def test_workflow_can_move_from_first_step_to_second() -> None:
     instance = WorkflowInstance(
-        id="1",
+        id=str(uuid.uuid4()),
         name="test instance",
         definition=TEST_FLOW,
         current_step="initial_request",
@@ -165,7 +111,7 @@ def test_workflow_can_move_from_first_step_to_second() -> None:
 
 def test_workflow_can_move_all_steps() -> None:
     instance = WorkflowInstance(
-        id="1",
+        id=str(uuid.uuid4()),
         name="test instance",
         definition=TEST_FLOW,
         current_step="initial_request",
@@ -173,37 +119,43 @@ def test_workflow_can_move_all_steps() -> None:
         history=[],
         checkpoints=[],
     )
+    actor_alice = Actor("alice")
     instance.apply_command(
-        "start_triage", {"notes": "Moved it on one step"}, actor=Actor("alice")
+        "start_triage", {"notes": "Moved it on one step"}, actor=actor_alice
     )
     assert instance.current_step == "triage"
     assert "Moved it on one step" == instance.data["notes"]
-    assert instance.history[0].event == "CommandApplied"
-    assert instance.history[0].initial_step == "initial_request"
-    assert instance.history[0].end_step == "triage"
-    assert instance.history[0].direction == "forward"
-    # apply_command will result in two history events being created:
-    #   CommandApplied and StepEntered
-    assert instance.history[1].event == "StepEntered"
+    assert len(instance.history) == 1
+
+    # Check the first history event is a CommandApplied event with correct data
+    history_event_1 = instance.history[0]
+    assert isinstance(history_event_1, CommandApplied)
+    assert history_event_1.from_step == "initial_request"
+    assert history_event_1.to_step == "triage"
+    assert history_event_1.command == "start_triage"
+    assert history_event_1.actor == actor_alice
+    assert history_event_1.payload == {"notes": "Moved it on one step"}
 
     instance.apply_command(
         "complete",
         {"notes_on_completion": "Completed this task."},
-        actor=Actor("alice"),
+        actor=actor_alice,
     )
     assert instance.current_step == "completed"
-    assert instance.history[2].event == "CommandApplied"
-    assert instance.history[2].initial_step == "triage"
-    assert instance.history[2].end_step == "completed"
-    assert instance.history[2].direction == "forward"
-    # apply_command will result in two history events being created:
-    #   CommandApplied and StepEntered
-    assert instance.history[3].event == "StepEntered"
+    assert len(instance.history) == 2
+
+    # Check the second history event
+    history_event_2 = instance.history[1]
+    assert isinstance(history_event_2, CommandApplied)
+    assert history_event_2.from_step == "triage"
+    assert history_event_2.to_step == "completed"
+    assert history_event_2.command == "complete"
+    assert history_event_2.actor == actor_alice
 
 
 def test_workflow_invalid_transition_raises_exception() -> None:
     instance = WorkflowInstance(
-        id="1",
+        id=str(uuid.uuid4()),
         name="test instance",
         definition=TEST_FLOW,
         current_step="initial_request",
@@ -221,7 +173,7 @@ def test_workflow_invalid_transition_raises_exception() -> None:
 
 def test_workflow_reveals_available_commands() -> None:
     instance = WorkflowInstance(
-        id="1",
+        id=str(uuid.uuid4()),
         name="test instance",
         definition=TEST_FLOW,
         current_step="initial_request",
@@ -237,7 +189,7 @@ def test_workflow_reveals_available_commands() -> None:
 
 def test_workflow_reveals_available_commands_pretty() -> None:
     instance = WorkflowInstance(
-        id="1",
+        id=str(uuid.uuid4()),
         name="test instance",
         definition=TEST_FLOW,
         current_step="initial_request",
@@ -252,13 +204,27 @@ complete: triage -> completed"""
     )
 
 
-def test_workflow_history_object() -> None:
-    h_forward = WorkflowHistory(
-        initial_step="initial",
-        end_step="end",
-        event="CommandApplied",
+def test_checkpoint() -> None:
+    "A checkpoint is a committed history object that allows for later retrieval."
+    instance = WorkflowInstance(
+        id=str(uuid.uuid4()),
+        name="test instance",
+        definition=TEST_FLOW,
+        current_step="initial_request",
+        data={"requester": "Colin Requester"},
+        history=[],
+        checkpoints=[],
     )
-    assert h_forward.direction == "forward"
-    assert h_forward.event == "CommandApplied"
-    with pytest.raises(dataclasses.FrozenInstanceError):
-        h_forward.direction = "back"  # type: ignore
+    actor_bob = Actor("bob")
+
+    checkpoint = instance.save_checkpoint(label="Test Checkpoint", actor=actor_bob)
+    assert checkpoint
+    assert len(instance.checkpoints) == 1
+    assert instance.checkpoints[0] == checkpoint
+    assert instance.checkpoints[0].data["requester"] == "Colin Requester"
+
+    assert len(instance.history) == 1
+    history_event = instance.history[0]
+    assert isinstance(history_event, CheckpointSaved)
+    assert history_event.checkpoint == checkpoint
+    assert history_event.actor == actor_bob

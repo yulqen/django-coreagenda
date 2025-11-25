@@ -1,4 +1,7 @@
-from dataclasses import dataclass
+import copy
+import uuid
+from abc import ABC
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable
 
@@ -122,14 +125,29 @@ class WorkflowDefinition:
 
 
 @dataclass(frozen=True)
-class WorkflowHistory:
-    initial_step: str
-    end_step: str
-    event: str
-    direction: str = "forward"
+class BaseEvent(ABC):
+    """Abstract base class for all workflow history events."""
+
+    timestamp: datetime = field(default_factory=datetime.utcnow, init=False)
 
 
-# TODO: include an Actor field in the WorkflowHistory
+@dataclass(frozen=True)
+class CommandApplied(BaseEvent):
+    """Records that a command was successfully applied, causing a state transition."""
+
+    from_step: str
+    to_step: str
+    command: str
+    actor: Actor
+    payload: dict
+
+
+@dataclass(frozen=True)
+class CheckpointSaved(BaseEvent):
+    """Records that a snapshot of the workflow state was saved."""
+
+    checkpoint: Checkpoint
+    actor: Actor
 
 
 @dataclass
@@ -139,19 +157,20 @@ class WorkflowInstance:
     Holds the live state:
     - which step currently on
     - what data has been collected so far
-    - a history of what has happened
+    - a history of what has happened (as a list of event objects)
     - any checkpoints saved
 
     Lives in memory in pure Python code. Allows for testing domain logic without
     Django or a database.
     """
 
+    # TODO: the id should be UUID and generated on creation
     id: str
     name: str
     definition: WorkflowDefinition
     current_step: str
     data: dict
-    history: list[WorkflowHistory]
+    history: list[BaseEvent]
     checkpoints: list[Checkpoint]
 
     def apply_command(self, command: str, payload: dict, actor: Actor) -> None:
@@ -168,25 +187,47 @@ class WorkflowInstance:
             DomainException: If the command is invalid for the current step of
             the workflow.
         """
-        _save_current_step = self.current_step
         transition = self.definition.find_transition(self.current_step, command)
         if transition is None:
-            raise DomainException("Invalid transition")
+            raise DomainException(
+                f"Invalid command '{command}' for step '{self.current_step}'"
+            )
         # TODO implement guard
+
+        from_step = self.current_step
         self.data.update(payload)
-        self.history.append(
-            WorkflowHistory(
-                initial_step=self.current_step,
-                end_step=transition.to_step,
-                event="CommandApplied",
-            )
-            # {"event": "CommandApplied", "command": command, "step": self.current_step}
-        )
         self.current_step = transition.to_step
+
         self.history.append(
-            WorkflowHistory(
-                initial_step=_save_current_step,
-                end_step=self.current_step,
-                event="StepEntered",
+            CommandApplied(
+                from_step=from_step,
+                to_step=transition.to_step,
+                command=command,
+                actor=actor,
+                payload=payload,
             )
         )
+
+    def save_checkpoint(self, label: str, actor: Actor) -> Checkpoint:
+        """
+        Saves a snapshot of the workflow's current state (step and data).
+
+        Args:
+            label: A user-friendly name for this checkpoint.
+            actor: The actor saving the checkpoint.
+
+        Returns:
+            The created Checkpoint object.
+        """
+        cp = Checkpoint(
+            id=str(uuid.uuid4()),
+            label=label,
+            step=self.current_step,
+            data=copy.deepcopy(self.data),
+            created_at=datetime.utcnow(),
+        )
+        self.checkpoints.append(cp)
+
+        # Record the creation of the checkpoint in the history log.
+        self.history.append(CheckpointSaved(checkpoint=cp, actor=actor))
+        return cp
