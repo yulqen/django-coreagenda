@@ -5,7 +5,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable
 
-from .errors import DomainException, WorkflowDefinitionValidationError
+from .errors import (DomainException, NoAvailableCheckpoint,
+                     WorkflowDefinitionValidationError)
 
 
 @dataclass(frozen=True)
@@ -150,6 +151,15 @@ class CheckpointSaved(BaseEvent):
     actor: Actor
 
 
+@dataclass(frozen=True)
+class StateRestored(BaseEvent):
+    """Records that the workflow state was restored from a checkpoint."""
+
+    checkpoint_id: str
+    actor: Actor
+    direction: str  # "rollback" or "rollforward"
+
+
 @dataclass
 class WorkflowInstance:
     """
@@ -172,6 +182,7 @@ class WorkflowInstance:
     data: dict
     history: list[BaseEvent]
     checkpoints: list[Checkpoint]
+    active_checkpoint_id: str | None = None
 
     def apply_command(self, command: str, payload: dict, actor: Actor) -> None:
         """
@@ -208,6 +219,9 @@ class WorkflowInstance:
             )
         )
 
+        # Any command moves the instance to a "live" state, not matching any checkpoint.
+        self.active_checkpoint_id = None
+
     def save_checkpoint(self, label: str, actor: Actor) -> Checkpoint:
         """
         Saves a snapshot of the workflow's current state (step and data).
@@ -227,33 +241,118 @@ class WorkflowInstance:
             created_at=datetime.utcnow(),
         )
         self.checkpoints.append(cp)
+        self.active_checkpoint_id = cp.id
 
         # Record the creation of the checkpoint in the history log.
         self.history.append(CheckpointSaved(checkpoint=cp, actor=actor))
         return cp
 
-    def rollback(self) -> None:
-        # we expect to have a history containing CheckpointSaved events:
-        _checkpoint_events = [
-            event for event in self.history if isinstance(event, CheckpointSaved)
-        ]
-        # there could be many....
-        _checkpoints = [event.checkpoint for event in _checkpoint_events]
-        # we want the most recent...
-        sorted_checkpoints = sorted(_checkpoints, key=lambda x: x.created_at)
-        # how do we want to manage checkpoints? We need to retain checkpoints so we can
-        # roll back and forward. How should we indicate that "current" checkpoint we are on?
-        # If we "apply" the data to the WorkflowInstance from the most recent Checkpoint,
-        # that will change the state of the instance to basically match the penultimate
-        # checkpoint in this list of chronologically sorted checkpoints - yes?
-        # Should we use an additional attribute on Checkpoint (e.g. cursor=True) to
-        # indicate what Checkpoint we are currently on?
-        breakpoint()
+    def _get_sorted_checkpoints(self) -> list[Checkpoint]:
+        """Returns checkpoints sorted by creation time."""
+        return sorted(self.checkpoints, key=lambda cp: cp.created_at)
 
-    def rollforward(self) -> None:
+    def rollback(self, actor: Actor) -> None:
         """
-        Use the next chronological Checkpoint in the list of chronologically
-        sorted Checkpoints, and use that to "apply" it's relevant data to the
-        WorkflowInstance (self)?
+        Rolls back the workflow's state to the previous checkpoint in its history.
+
+        Args:
+            actor: The actor (user or system) initiating the rollback.
+
+        Raises:
+            NoAvailableCheckpoint: If no checkpoints exist or if the workflow is
+                already at the earliest available checkpoint.
+            DomainException: If the `active_checkpoint_id` points to a checkpoint
+                that cannot be found in the instance's `checkpoints` list, indicating
+                an internal consistency error.
         """
-        pass
+        sorted_cps = self._get_sorted_checkpoints()
+        if not sorted_cps:
+            raise NoAvailableCheckpoint("Cannot rollback: no checkpoints exist.")
+
+        if self.active_checkpoint_id:
+            try:
+                # Find the index of the currently active checkpoint
+                current_index = [cp.id for cp in sorted_cps].index(
+                    self.active_checkpoint_id
+                )
+            except ValueError:
+                raise DomainException(
+                    f"Active checkpoint ID '{self.active_checkpoint_id}' not found."
+                )
+        else:
+            # If state is live, it's conceptually after the last checkpoint.
+            # So, rolling back goes to the last one.
+            current_index = len(sorted_cps)
+
+        if current_index == 0:
+            raise NoAvailableCheckpoint(
+                "Cannot rollback: already at the earliest checkpoint."
+            )
+
+        target_checkpoint = sorted_cps[current_index - 1]
+
+        # Restore state from the target checkpoint
+        self.current_step = target_checkpoint.step
+        self.data = copy.deepcopy(target_checkpoint.data)
+        self.active_checkpoint_id = target_checkpoint.id
+
+        self.history.append(
+            StateRestored(
+                checkpoint_id=target_checkpoint.id, actor=actor, direction="rollback"
+            )
+        )
+
+    def rollforward(self, actor: Actor) -> None:
+        """
+        Rolls forward the workflow's state to the next checkpoint in its history.
+        This operation is only possible if a rollback has occurred, meaning the
+        `active_checkpoint_id` points to a checkpoint that is not the latest one.
+
+        Args:
+            actor: The actor (user or system) initiating the rollforward.
+
+        Raises:
+            NoAvailableCheckpoint: If the current state is "live" (not at any
+                saved checkpoint), if no checkpoints exist, or if the workflow
+                is already at the latest available checkpoint.
+            DomainException: If the `active_checkpoint_id` points to a checkpoint
+                that cannot be found in the instance's `checkpoints` list, indicating
+                an internal consistency error.
+        """
+        if self.active_checkpoint_id is None:
+            raise NoAvailableCheckpoint(
+                "Cannot rollforward: current state is live, not at a checkpoint."
+            )
+
+        sorted_cps = self._get_sorted_checkpoints()
+        if not sorted_cps:
+            raise NoAvailableCheckpoint("Cannot rollforward: no checkpoints exist.")
+
+        try:
+            current_index = [cp.id for cp in sorted_cps].index(
+                self.active_checkpoint_id
+            )
+        except ValueError:
+            raise DomainException(
+                f"Active checkpoint ID '{self.active_checkpoint_id}' not found."
+            )
+
+        if current_index >= len(sorted_cps) - 1:
+            raise NoAvailableCheckpoint(
+                "Cannot rollforward: already at the latest checkpoint."
+            )
+
+        target_checkpoint = sorted_cps[current_index + 1]
+
+        # Restore state from the target checkpoint
+        self.current_step = target_checkpoint.step
+        self.data = copy.deepcopy(target_checkpoint.data)
+        self.active_checkpoint_id = target_checkpoint.id
+
+        self.history.append(
+            StateRestored(
+                checkpoint_id=target_checkpoint.id,
+                actor=actor,
+                direction="rollforward",
+            )
+        )

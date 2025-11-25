@@ -4,9 +4,10 @@ from datetime import datetime
 
 import pytest
 from domain.workflows.definitions import (Actor, Checkpoint, CheckpointSaved,
-                                          CommandApplied, Transition,
-                                          WorkflowDefinition, WorkflowInstance)
-from domain.workflows.errors import (DomainException,
+                                          CommandApplied, StateRestored,
+                                          Transition, WorkflowDefinition,
+                                          WorkflowInstance)
+from domain.workflows.errors import (DomainException, NoAvailableCheckpoint,
                                      WorkflowDefinitionValidationError)
 
 
@@ -222,6 +223,7 @@ def test_checkpoint() -> None:
     assert len(instance.checkpoints) == 1
     assert instance.checkpoints[0] == checkpoint
     assert instance.checkpoints[0].data["requester"] == "Colin Requester"
+    assert instance.active_checkpoint_id == checkpoint.id
 
     assert len(instance.history) == 1
     history_event = instance.history[0]
@@ -230,8 +232,10 @@ def test_checkpoint() -> None:
     assert history_event.actor == actor_bob
 
 
-def test_rolloback_from_checkpoint() -> None:
-    instance = WorkflowInstance(
+@pytest.fixture
+def basic_instance() -> WorkflowInstance:
+    """Returns a clean workflow instance."""
+    return WorkflowInstance(
         id=str(uuid.uuid4()),
         name="test instance",
         definition=TEST_FLOW,
@@ -240,13 +244,77 @@ def test_rolloback_from_checkpoint() -> None:
         history=[],
         checkpoints=[],
     )
-    actor_bob = Actor("bob")
-    checkpoint = instance.save_checkpoint(label="First Checkpoint", actor=actor_bob)  # noqa
+
+
+def test_rollback_and_rollforward(basic_instance: WorkflowInstance) -> None:
+    instance = basic_instance
+    actor = Actor("test_actor")
+
+    # 1. Initial state, save first checkpoint
+    cp1 = instance.save_checkpoint(label="CP1", actor=actor)
     assert instance.current_step == "initial_request"
-    instance.apply_command(
-        "start_triage", {"notes": "Moved it on one step"}, actor=actor_bob
-    )
-    checkpoint = instance.save_checkpoint(label="Second Checkpoint", actor=actor_bob)  # noqa
+    assert instance.active_checkpoint_id == cp1.id
+    assert instance.data["requester"] == "Colin Requester"
+
+    # 2. Apply command, state becomes "live"
+    instance.apply_command("start_triage", {"notes": "Step 2"}, actor=actor)
     assert instance.current_step == "triage"
-    instance.rollback()
+    assert instance.active_checkpoint_id is None
+
+    # 3. Save second checkpoint
+    cp2 = instance.save_checkpoint(label="CP2", actor=actor)
+    assert instance.current_step == "triage"
+    assert instance.data["notes"] == "Step 2"
+    assert instance.active_checkpoint_id == cp2.id
+
+    # 4. Rollback from active checkpoint CP2 to CP1
+    instance.rollback(actor=actor)
     assert instance.current_step == "initial_request"
+    assert "notes" not in instance.data  # data is restored from CP1
+    assert instance.active_checkpoint_id == cp1.id
+    # Check history event
+    last_event = instance.history[3]
+    assert isinstance(last_event, StateRestored)
+    assert last_event.checkpoint_id == cp1.id
+    assert last_event.direction == "rollback"
+
+    # 5. Rollforward to second checkpoint
+    instance.rollforward(actor=actor)
+    assert instance.current_step == "triage"
+    assert instance.data["notes"] == "Step 2"
+    assert instance.active_checkpoint_id == cp2.id
+    last_event = instance.history[-1]
+    assert isinstance(last_event, StateRestored)
+    assert last_event.checkpoint_id == cp2.id
+    assert last_event.direction == "rollforward"
+
+
+def test_rollback_edge_cases(basic_instance: WorkflowInstance) -> None:
+    instance = basic_instance
+    actor = Actor("test_actor")
+
+    # Can't rollback with no checkpoints
+    with pytest.raises(NoAvailableCheckpoint, match="no checkpoints exist"):
+        instance.rollback(actor=actor)
+
+    # Save one checkpoint
+    instance.save_checkpoint(label="CP1", actor=actor)
+
+    # Can't rollback when at the only checkpoint
+    with pytest.raises(NoAvailableCheckpoint, match="already at the earliest"):
+        instance.rollback(actor=actor)
+
+
+def test_rollforward_edge_cases(basic_instance: WorkflowInstance) -> None:
+    instance = basic_instance
+    actor = Actor("test_actor")
+
+    # Can't rollforward when instance is live and has no checkpoints
+    with pytest.raises(NoAvailableCheckpoint, match="current state is live"):
+        instance.rollforward(actor=actor)
+
+    instance.save_checkpoint(label="CP1", actor=actor)
+
+    # Can't rollforward when at the latest checkpoint
+    with pytest.raises(NoAvailableCheckpoint, match="already at the latest"):
+        instance.rollforward(actor=actor)
