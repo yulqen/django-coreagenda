@@ -11,6 +11,20 @@ from domain.workflows.errors import (DomainException, NoAvailableCheckpoint,
                                      WorkflowDefinitionValidationError)
 
 
+@pytest.fixture
+def basic_instance() -> WorkflowInstance:
+    """Returns a clean workflow instance."""
+    return WorkflowInstance(
+        id=str(uuid.uuid4()),
+        name="test instance",
+        definition=TEST_FLOW,
+        current_step="initial_request",
+        data={"requester": "Colin Requester"},
+        history=[],
+        checkpoints=[],
+    )
+
+
 TEST_FLOW = WorkflowDefinition(
     name="test definition",
     initial_step="initial request",
@@ -80,56 +94,31 @@ def test_workflow_definition_basic_validity() -> None:
         ).is_valid()
 
 
-def test_workflow_instance_exists() -> None:
-    instance = WorkflowInstance(
-        id=str(uuid.uuid4()),
-        name="test instance",
-        definition=TEST_FLOW,
-        current_step="initial_request",
-        data={},
-        history=[],
-        checkpoints=[],
-    )
-    assert instance.definition.name == "test definition"
+def test_workflow_instance_exists(basic_instance: WorkflowInstance) -> None:
+    assert basic_instance.definition.name == "test definition"
 
 
-def test_workflow_can_move_from_first_step_to_second() -> None:
-    instance = WorkflowInstance(
-        id=str(uuid.uuid4()),
-        name="test instance",
-        definition=TEST_FLOW,
-        current_step="initial_request",
-        data={"requester": "Colin Requester"},
-        history=[],
-        checkpoints=[],
-    )
-    instance.apply_command(
+def test_workflow_can_move_from_first_step_to_second(
+    basic_instance: WorkflowInstance,
+) -> None:
+    basic_instance.apply_command(
         "start_triage", {"notes": "Moved it on one step"}, actor=Actor("alice")
     )
-    assert instance.current_step == "triage"
-    assert "Moved it on one step" == instance.data["notes"]
+    assert basic_instance.current_step == "triage"
+    assert "Moved it on one step" == basic_instance.data["notes"]
 
 
-def test_workflow_can_move_all_steps() -> None:
-    instance = WorkflowInstance(
-        id=str(uuid.uuid4()),
-        name="test instance",
-        definition=TEST_FLOW,
-        current_step="initial_request",
-        data={"requester": "Colin Requester"},
-        history=[],
-        checkpoints=[],
-    )
+def test_workflow_can_move_all_steps(basic_instance: WorkflowInstance) -> None:
     actor_alice = Actor("alice")
-    instance.apply_command(
+    basic_instance.apply_command(
         "start_triage", {"notes": "Moved it on one step"}, actor=actor_alice
     )
-    assert instance.current_step == "triage"
-    assert "Moved it on one step" == instance.data["notes"]
-    assert len(instance.history) == 1
+    assert basic_instance.current_step == "triage"
+    assert "Moved it on one step" == basic_instance.data["notes"]
+    assert len(basic_instance.history) == 1
 
     # Check the first history event is a CommandApplied event with correct data
-    history_event_1 = instance.history[0]
+    history_event_1 = basic_instance.history[0]
     assert isinstance(history_event_1, CommandApplied)
     assert history_event_1.from_step == "initial_request"
     assert history_event_1.to_step == "triage"
@@ -137,16 +126,16 @@ def test_workflow_can_move_all_steps() -> None:
     assert history_event_1.actor == actor_alice
     assert history_event_1.payload == {"notes": "Moved it on one step"}
 
-    instance.apply_command(
+    basic_instance.apply_command(
         "complete",
         {"notes_on_completion": "Completed this task."},
         actor=actor_alice,
     )
-    assert instance.current_step == "completed"
-    assert len(instance.history) == 2
+    assert basic_instance.current_step == "completed"
+    assert len(basic_instance.history) == 2
 
     # Check the second history event
-    history_event_2 = instance.history[1]
+    history_event_2 = basic_instance.history[1]
     assert isinstance(history_event_2, CommandApplied)
     assert history_event_2.from_step == "triage"
     assert history_event_2.to_step == "completed"
@@ -154,96 +143,52 @@ def test_workflow_can_move_all_steps() -> None:
     assert history_event_2.actor == actor_alice
 
 
-def test_workflow_invalid_transition_raises_exception() -> None:
-    instance = WorkflowInstance(
-        id=str(uuid.uuid4()),
-        name="test instance",
-        definition=TEST_FLOW,
-        current_step="initial_request",
-        data={"requester": "Colin Requester"},
-        history=[],
-        checkpoints=[],
-    )
+def test_workflow_invalid_transition_raises_exception(
+    basic_instance: WorkflowInstance,
+) -> None:
     with pytest.raises(DomainException):
-        instance.apply_command(
+        basic_instance.apply_command(
             "disallowed_command",
             {"notes": "Moved it on one step"},
             actor=Actor("alice"),
         )
 
 
-def test_workflow_reveals_available_commands() -> None:
-    instance = WorkflowInstance(
-        id=str(uuid.uuid4()),
-        name="test instance",
-        definition=TEST_FLOW,
-        current_step="initial_request",
-        data={"requester": "Colin Requester"},
-        history=[],
-        checkpoints=[],
-    )
+def test_workflow_reveals_available_commands(basic_instance: WorkflowInstance) -> None:
     assert (
-        "start_triage" in instance.definition.commands()
-        and "complete" in instance.definition.commands()
+        "start_triage" in basic_instance.definition.commands()
+        and "complete" in basic_instance.definition.commands()
     )
 
 
-def test_workflow_reveals_available_commands_pretty() -> None:
-    instance = WorkflowInstance(
-        id=str(uuid.uuid4()),
-        name="test instance",
-        definition=TEST_FLOW,
-        current_step="initial_request",
-        data={"requester": "Colin Requester"},
-        history=[],
-        checkpoints=[],
-    )
+def test_workflow_reveals_available_commands_pretty(
+    basic_instance: WorkflowInstance,
+) -> None:
     assert (
-        instance.definition.commands_pretty()
+        basic_instance.definition.commands_pretty()
         == """start_triage: initial_request -> triage
 complete: triage -> completed"""
     )
 
 
-def test_checkpoint() -> None:
+def test_checkpoint(basic_instance: WorkflowInstance) -> None:
     "A checkpoint is a committed history object that allows for later retrieval."
-    instance = WorkflowInstance(
-        id=str(uuid.uuid4()),
-        name="test instance",
-        definition=TEST_FLOW,
-        current_step="initial_request",
-        data={"requester": "Colin Requester"},
-        history=[],
-        checkpoints=[],
-    )
     actor_bob = Actor("bob")
 
-    checkpoint = instance.save_checkpoint(label="Test Checkpoint", actor=actor_bob)
+    checkpoint = basic_instance.save_checkpoint(
+        label="Test Checkpoint", actor=actor_bob
+    )
     assert checkpoint
-    assert len(instance.checkpoints) == 1
-    assert instance.checkpoints[0] == checkpoint
-    assert instance.checkpoints[0].data["requester"] == "Colin Requester"
-    assert instance.active_checkpoint_id == checkpoint.id
+    assert len(basic_instance.checkpoints) == 1
+    assert basic_instance.checkpoints[0] == checkpoint
+    assert basic_instance.checkpoints[0].data["requester"] == "Colin Requester"
+    assert basic_instance.active_checkpoint_id == checkpoint.id
 
-    assert len(instance.history) == 1
-    history_event = instance.history[0]
+    assert len(basic_instance.history) == 1
+    history_event = basic_instance.history[0]
     assert isinstance(history_event, CheckpointSaved)
     assert history_event.checkpoint == checkpoint
     assert history_event.actor == actor_bob
-
-
-@pytest.fixture
-def basic_instance() -> WorkflowInstance:
-    """Returns a clean workflow instance."""
-    return WorkflowInstance(
-        id=str(uuid.uuid4()),
-        name="test instance",
-        definition=TEST_FLOW,
-        current_step="initial_request",
-        data={"requester": "Colin Requester"},
-        history=[],
-        checkpoints=[],
-    )
 
 
 def test_rollback_and_rollforward(basic_instance: WorkflowInstance) -> None:
